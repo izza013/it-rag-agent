@@ -1,0 +1,44 @@
+# AWS SAM Configuration for Multi-Environment Deployment
+# Usage: sam deploy --config-env <environment>
+# Examples:
+#   sam build && sam deploy --config-env dev
+
+
+version = 0.1
+
+# ============================================
+# DEV Environment
+# ============================================
+[dev]
+[dev.global.parameters]
+region = "us-east-2"
+
+[dev.deploy.parameters]
+stack_name = "it-support-agent-dev"
+resolve_s3 = true
+s3_prefix = "it-support-agent-dev"
+region = "us-east-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_NAMED_IAM"
+parameter_overrides = [
+    "Environment=dev",
+    "MemorySize=512",
+    "Timeout=120",
+    "S3BucketName=it-data-bucket-rag",
+    "S3BucketArn=arn:aws:s3:::it-data-bucket-rag",
+    "S3DocsPrefix=docx/",
+    "VectorBucketArn=arn:aws:s3vectors:us-east-2:961341532410:bucket/bedrock-knowledge-base-n28qf0",
+    "KnowledgeBaseName=my-it-kb",
+    "KnowledgeBaseId=BDVJZCC2LY",
+    "AgentName=it-support-agent-923579",
+    "AgentId=GTHIIVIDEF",
+    "AliasId=GYIQ6VIELI",
+    "BedrockModelId=us.amazon.nova-lite-v1:0",
+    "GuardrailName=IT-GAUDRAIL",
+    "GuardrailAlias=it-agent",
+    "GuardrailId=GYIQ6VIELI",
+    "GuardrailVersion=DRAFT",
+    "BedrockRoleArn=arn:aws:iam::961341532410:role/BedrockExecutionRole",
+    "IndexName=s3-bucket-it-vectors"
+]
+tags = "Environment=dev Project=ITSupportAgent"

@@ -1,0 +1,644 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  IT Support Agent - Bedrock Agent with Knowledge Base and Guardrails
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+    Description: Deployment environment (dev)
+
+  MemorySize:
+    Type: Number
+    Default: 512
+    Description: Lambda function memory size in MB
+
+  Timeout:
+    Type: Number
+    Default: 120
+    Description: Lambda function timeout in seconds
+
+  S3BucketName:
+    Type: String
+    Default: it-data-bucket-rag
+    Description: S3 bucket name for IT support documents
+
+  KnowledgeBaseName:
+    Type: String
+    Default: my-it-kb
+    Description: Name of the Bedrock Knowledge Base
+
+  AgentName:
+    Type: String
+    Default: it-support-agent-923579
+    Description: Name of the Bedrock Agent
+
+  BedrockModelId:
+    Type: String
+    Default: us.amazon.nova-lite-v1:0
+    Description: Bedrock model ID to use
+  
+  GuardrailName:
+    Type: String
+    Default: IT-GAUDRAIL
+    Description: Name of the Bedrock Guardrail
+  
+  GuardrailAlias:
+    Type: String
+    Default: it-agent
+    Description: Guardrail alias
+  
+  GuardrailId:
+    Type: String
+    Default: GYIQ6VIELI
+    Description: Guardrail ID
+  
+  GuardrailVersion:
+    Type: String
+    Default: DRAFT
+    Description: Guardrail version
+  
+  KnowledgeBaseId:
+    Type: String
+    Default: BDVJZCC2LY
+    Description: Knowledge Base ID
+  
+  AgentId:
+    Type: String
+    Default: GTHIIVIDEF
+    Description: Agent ID
+  
+  AliasId:
+    Type: String
+    Default: GYIQ6VIELI
+    Description: Agent Alias ID
+  
+  S3BucketArn:
+    Type: String
+    Default: arn:aws:s3:::it-data-bucket-rag
+    Description: S3 bucket ARN
+  
+  S3DocsPrefix:
+    Type: String
+    Default: docx/
+    Description: S3 documents prefix
+  
+  VectorBucketArn:
+    Type: String
+    Default: arn:aws:s3vectors:us-east-2:961341532410:bucket/bedrock-knowledge-base-n28qf0
+    Description: Vector bucket ARN
+  
+  BedrockRoleArn:
+    Type: String
+    Default: arn:aws:iam::961341532410:role/BedrockExecutionRole
+    Description: Bedrock execution role ARN
+  
+  IndexName:
+    Type: String
+    Default: s3-bucket-it-vectors
+    Description: Vector index name
+  
+  
+
+Globals:
+  Function:
+    Timeout: !Ref Timeout
+    MemorySize: !Ref MemorySize
+    Runtime: python3.13
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        S3_BUCKET_NAME: !Ref S3BucketName
+        S3_BUCKET_ARN: !Ref S3BucketArn
+        S3_DOCS_PREFIX: !Ref S3DocsPrefix
+        VECTOR_BUCKET_ARN: !Ref VectorBucketArn
+        KNOWLEDGE_BASE_NAME: !Ref KnowledgeBaseName
+        KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
+        AGENT_NAME: !Ref AgentName
+        AGENT_ID: !Ref AgentId
+        ALIAS_ID: !Ref AliasId
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        GUARDRAIL_NAME: !Ref GuardrailName
+        GAUDRIAL_ALIAS: !Ref GuardrailAlias
+        GUARDRAIL_ID: !Ref GuardrailId
+        GUARDRAIL_VERSION: !Ref GuardrailVersion
+        BEDROCK_ROLE_ARN: !Ref BedrockRoleArn
+        INDEX_NAME: !Ref IndexName
+        
+
+Resources:
+  # ============================================
+  # S3 Bucket for IT Support Documents
+  # NOTE: Using existing bucket, not creating a new one
+  # ============================================
+  # ITDocumentsBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub '${S3BucketName}-${Environment}'
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: ITSupportAgent
+
+  # ============================================
+  # IAM Role for Lambda Function
+  # ============================================
+  ITSupportAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ITSupportAgentRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub 'ITSupportAgentPolicy-${Environment}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudWatch Logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+                
+              # Bedrock Agent Runtime
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeAgent
+                Resource:
+                  - arn:aws:bedrock:us-east-2:961341532410:agent-alias/GTHIIVIDEF/GYIQ6VIELI
+              
+              # Bedrock Agent Runtime
+              - Effect: Allow
+                Action:
+                  - bedrock-agent-runtime:InvokeAgent
+                  - bedrock-agent-runtime:Retrieve
+                  - bedrock-agent-runtime:RetrieveAndGenerate
+                Resource: '*'
+              
+              # Bedrock Agent Management
+              - Effect: Allow
+                Action:
+                  - bedrock-agent:GetAgent
+                  - bedrock-agent:ListAgents
+                  - bedrock-agent:CreateAgent
+                  - bedrock-agent:UpdateAgent
+                  - bedrock-agent:GetKnowledgeBase
+                  - bedrock-agent:ListKnowledgeBases
+                  - bedrock-agent:CreateKnowledgeBase
+                  - bedrock-agent:GetDataSource
+                  - bedrock-agent:CreateDataSource
+                  - bedrock-agent:StartIngestionJob
+                Resource: '*'
+              
+              # Bedrock Models and Guardrails
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:GetGuardrail
+                  - bedrock:CreateGuardrail
+                  - bedrock:ListGuardrails
+                Resource: '*'
+              
+              # S3 Access
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !Ref S3BucketArn
+                  - !Sub '${S3BucketArn}/*'
+              
+              # DynamoDB Access (for session management)
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:DescribeTable
+                Resource:
+                  - !GetAtt SessionTable.Arn
+
+  # ============================================
+  # API Gateway REST API
+  # ============================================
+  ITSupportApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'ITSupportApi-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,x-api-key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: true
+      EndpointConfiguration:
+        Type: REGIONAL
+      Tags:
+        Environment: !Ref Environment
+        Project: ITSupportAgent
+
+  # ============================================
+  # Lambda Function - IT Support Agent
+  # ============================================
+  ITSupportAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'ITSupportAgent-${Environment}'
+      CodeUri: ./
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt ITSupportAgentRole.Arn
+      Environment:
+        Variables:
+          SESSION_TABLE_NAME: !Ref SessionTable
+      Events:
+        # API Gateway Event - POST /invoke
+        InvokeAgent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ITSupportApi
+            Path: /invoke
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+        
+        # API Gateway Event - POST /session
+        CreateSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ITSupportApi
+            Path: /session
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+        # API Gateway Event - GET /session/{session_id}
+        GetSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ITSupportApi
+            Path: /session/{session_id}
+            Method: GET
+            Auth:
+              ApiKeyRequired: true
+
+
+  # ============================================
+  # DynamoDB Table for Session Management
+  # ============================================
+  SessionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'it_support_sessions_${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+
+  # ============================================
+  # IAM Role for Bedrock Agent
+  # ============================================
+  BedrockAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BedrockAgentRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub 'BedrockAgentPolicy-${Environment}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Ref S3BucketArn
+                  - !Sub '${S3BucketArn}/*'
+
+  # ============================================
+  # S3 Bucket for Web Interface Hosting
+  # ============================================
+  WebHostingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'it-support-web-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+  # ============================================
+  # CloudFront Origin Access Identity
+  # ============================================
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for IT Support Web Interface - ${Environment}'
+
+  # ============================================
+  # S3 Bucket Policy for CloudFront Access
+  # ============================================
+  WebHostingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebHostingBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebHostingBucket.Arn}/*'
+
+  # ============================================
+  # CloudFront Distribution
+  # ============================================
+  WebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'IT Support Agent Web Interface - ${Environment}'
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebHostingBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+  # ============================================
+  # API Gateway API Key
+  # ============================================
+  ITSupportApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ITSupportApiStage
+    Properties:
+      Name: !Sub 'ITSupportApiKey-${Environment}'
+      Description: API Key for IT Support Agent API
+      Enabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+  # ============================================
+  # API Gateway Usage Plan
+  # ============================================
+  ITSupportUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: 
+      - ITSupportApiStage
+    Properties:
+      UsagePlanName: !Sub 'ITSupportUsagePlan-${Environment}'
+      Description: Usage plan for IT Support Agent API
+      ApiStages:
+        - ApiId: !Ref ITSupportApi
+          Stage: !Ref ITSupportApiStage
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 50
+      Quota:
+        Limit: 10000
+        Period: MONTH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+  # ============================================
+  # Link API Key to Usage Plan
+  # ============================================
+  ITSupportUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ITSupportApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ITSupportUsagePlan
+
+  # ============================================
+  # Secrets Manager Secret for API Key
+  # ============================================
+  ITSupportApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'ITSupportApiKey-${Environment}'
+      Description: API Key for IT Support Agent
+      SecretString: !Sub |
+        {
+          "apiKey": "${ITSupportApiKey}"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: ITSupportAgent
+
+Outputs:
+  Environment:
+    Description: "Deployment Environment"
+    Value: !Ref Environment
+
+  ITSupportAgentFunction:
+    Description: "IT Support Agent Lambda Function ARN"
+    Value: !GetAtt ITSupportAgentFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ITSupportAgentFunctionArn'
+
+  ITSupportAgentFunctionName:
+    Description: "IT Support Agent Lambda Function Name"
+    Value: !Ref ITSupportAgentFunction
+
+  ITSupportAgentRole:
+    Description: "IAM Role for IT Support Agent Lambda"
+    Value: !GetAtt ITSupportAgentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ITSupportAgentRoleArn'
+
+  BedrockAgentRole:
+    Description: "IAM Role for Bedrock Agent"
+    Value: !GetAtt BedrockAgentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BedrockAgentRoleArn'
+
+  ITDocumentsBucket:
+    Description: "S3 Bucket for IT Support Documents"
+    Value: !Ref S3BucketName
+    Export:
+      Name: !Sub '${AWS::StackName}-ITDocumentsBucket'
+
+  ITDocumentsBucketArn:
+    Description: "S3 Bucket ARN for IT Support Documents"
+    Value: !Ref S3BucketArn
+    Export:
+      Name: !Sub '${AWS::StackName}-ITDocumentsBucketArn'
+
+  SessionTableName:
+    Description: "DynamoDB Table Name for Session Management"
+    Value: !Ref SessionTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionTableName'
+
+  SessionTableArn:
+    Description: "DynamoDB Table ARN for Session Management"
+    Value: !GetAtt SessionTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionTableArn'
+
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub 'https://${ITSupportApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  ApiGatewayId:
+    Description: "API Gateway REST API ID"
+    Value: !Ref ITSupportApi
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiId'
+
+  WebHostingBucketName:
+    Description: "S3 Bucket Name for Web Interface Hosting"
+    Value: !Ref WebHostingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebHostingBucketName'
+
+  CloudFrontDistributionId:
+    Description: "CloudFront Distribution ID"
+    Value: !Ref WebDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDistributionId'
+
+  CloudFrontDomainName:
+    Description: "CloudFront Distribution Domain Name"
+    Value: !GetAtt WebDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
+
+  WebsiteURL:
+    Description: "Public URL for IT Support Agent Web Interface"
+    Value: !Sub 'https://${WebDistribution.DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteURL'
+
+  ApiKeyId:
+    Description: "API Gateway API Key ID"
+    Value: !Ref ITSupportApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeyId'
+
+  ApiKeySecretArn:
+    Description: "Secrets Manager ARN containing the API Key"
+    Value: !Ref ITSupportApiKeySecret
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeySecretArn'
+
+  UsagePlanId:
+    Description: "API Gateway Usage Plan ID"
+    Value: !Ref ITSupportUsagePlan
+    Export:
+      Name: !Sub '${AWS::StackName}-UsagePlanId'
