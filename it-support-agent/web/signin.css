@@ -1,0 +1,36 @@
+/* ─── signin.css — responsive overrides for the Sign-Up page ─── */
+
+/* Switch body to a scrollable flex-column so the card is centered
+   horizontally and doesn't get clipped on short viewports */
+body {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    /* center card horizontally */
+    justify-content: flex-start !important;
+    min-height: 20vh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    /* allow vertical scrolling */
+    padding: 40px 16px !important;
+    /* breathing room on all sides */
+}
+
+/* Fluid, centered card */
+.card {
+    width: 100% !important;
+    max-width: 480px !important;
+    box-sizing: border-box !important;
+    /* margin auto not needed — flex align-items:center handles it */
+}
+
+/* Tighter padding on small phones */
+@media (max-width: 520px) {
+    body {
+        padding: 20px 12px !important;
+    }
+
+    .card {
+        padding: 28px 18px !important;
+    }
+}

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up — AWS Cognito</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="login_styles.css" />
+  <link rel="stylesheet" href="signin.css" />
+</head>
+
+<body>
+
+  <!-- Config Modal -->
+  <div class="modal-overlay" id="configModal">
+    <div class="modal">
+      <h2>
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93V18a1 1 0 0 0-2 0v1.93A8 8 0 0 1 4.07 13H6a1 1 0 0 0 0-2H4.07A8 8 0 0 1 11 4.07V6a1 1 0 0 0 2 0V4.07A8 8 0 0 1 19.93 11H18a1 1 0 0 0 0 2h1.93A8 8 0 0 1 13 19.93z" />
+        </svg>
+        Cognito Configuration
+      </h2>
+      <div class="form-group">
+        <label>User Pool ID</label>
+        <input type="text" id="cfgPoolId" placeholder="us-east-2_XXXXXXXXX" />
+      </div>
+      <div class="form-group">
+        <label>App Client ID</label>
+        <input type="text" id="cfgClientId" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxx" />
+      </div>
+      <div class="form-group">
+        <label>Region</label>
+        <input type="text" id="cfgRegion" placeholder="us-east-2" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-sm-ghost" onclick="closeConfig()">Cancel</button>
+        <button class="btn-sm btn-sm-primary" onclick="saveConfig()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verification Modal -->
+  <div class="modal-overlay" id="verificationModal">
+    <div class="modal">
+      <h2>
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+        </svg>
+        Verify Your Email
+      </h2>
+
+      <div class="modal-info">
+        We've sent a verification code to <strong id="verifyEmail">your email</strong>. Please enter the code below.
+      </div>
+
+      <div class="form-group">
+        <label>Verification Code</label>
+        <input type="text" id="verificationCode" placeholder="Enter 6-digit code" autocomplete="off" maxlength="6" />
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-sm-ghost" onclick="resendVerificationCode()">Resend Code</button>
+        <button id="verifyBtn" class="btn-sm btn-sm-primary" onclick="handleVerification()">
+          Verify
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign-up Card -->
+  <div class="card">
+
+    <div class="header">
+      <div class="logo-row">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5L12 1zm0 4l6 2.67V11c0 3.83-2.6 7.44-6 8.6C8.6 18.44 6 14.83 6 11V7.67L12 5z" />
+          </svg>
+        </div>
+        <span class="logo-text">IT Support Agent</span>
+      </div>
+      <h1>Create a new<br /><span>account.</span></h1>
+    </div>
+
+    <!-- Config banner -->
+    <div class="config-banner" id="configBanner">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+      </svg>
+      <span>Not configured — <a href="#" style="color:var(--accent);text-decoration:none"
+          onclick="openConfig(); return false;">set your Cognito credentials</a></span>
+    </div>
+
+    <!-- Alert -->
+    <div class="alert" id="alert">
+      <svg viewBox="0 0 24 24"></svg>
+      <span id="alertMsg"></span>
+    </div>
+
+    <!-- Sign-up form -->
+    <form id="signUpForm" onsubmit="handleSignUp(event)">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="Enter username" autocomplete="username" required />
+      </div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="email" placeholder="name@host.com" autocomplete="email" required />
+      </div>
+
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="fullName" placeholder="Enter your full name" autocomplete="name" required />
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <div class="input-wrap">
+          <input type="password" id="password" placeholder="Enter password" autocomplete="new-password" required />
+          <button type="button" class="eye-btn" onclick="togglePassword()" aria-label="Toggle password visibility">
+            <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <div class="input-wrap">
+          <input type="password" id="confirmPassword" placeholder="Reenter password" autocomplete="new-password"
+            required />
+          <button type="button" class="eye-btn" onclick="toggleConfirmPassword()"
+            aria-label="Toggle password visibility">
+            <svg id="confirmEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Password Requirements -->
+      <div class="password-requirements">
+        <div class="req-title">Password Requirements</div>
+        <ul id="passwordReqs">
+          <li id="req-length">At least 8 characters</li>
+          <li id="req-uppercase">One uppercase letter (A-Z)</li>
+          <li id="req-lowercase">One lowercase letter (a-z)</li>
+          <li id="req-number">One number (0-9)</li>
+          <li id="req-special">One special character (!@#$%^&*)</li>
+          <li id="req-match">Passwords match</li>
+        </ul>
+      </div>
+
+      <div class="actions-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="showPassword" onchange="toggleShowPassword()" /> Show password
+        </label>
+      </div>
+
+      <button type="submit" class="btn-primary" id="signUpBtn">
+        <span class="btn-text">Sign Up</span>
+        <div class="spinner"></div>
+      </button>
+
+      <div style="text-align:center;margin-top:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        Have an account already? <a href="signin.html"
+          style="color:var(--accent);text-decoration:none;font-weight:500;">Sign in</a>
+      </div>
+    </form>
+
+  </div>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.7/dist/amazon-cognito-identity.min.js"></script>
+  <script src="signup.js"></script>
+</body>
+
+</html>
